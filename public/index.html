@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PGA Championship 2026 — Fantasy Challenge</title>
+  <title>US Open 2026 — Fantasy Challenge</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -161,7 +161,7 @@ function App() {
     return rounds;
   };
 
-  // Cut line: top 70 and ties
+  // Cut line: top 60 and ties
   const allPlayers = Object.values(players);
   // R2 is over when every player has r2 data AND no one is still mid-round in R2
   const r2Done = allPlayers.length > 0 && allPlayers.every(p => p.r2 != null) && allPlayers.every(p => {
@@ -172,7 +172,7 @@ function App() {
   // Cut is a 36-hole cut — always compute from R1+R2 only, never from live total
   const r1r2Score = (p) => (p.r1 != null && p.r2 != null) ? p.r1 + p.r2 : null;
   const playersWithR1R2 = allPlayers.filter(p => r1r2Score(p) != null).sort((a, b) => r1r2Score(a) - r1r2Score(b));
-  const projectedCutScore = playersWithR1R2.length >= 70 ? r1r2Score(playersWithR1R2[69]) : null;
+  const projectedCutScore = playersWithR1R2.length >= 60 ? r1r2Score(playersWithR1R2[59]) : null;
   const actualCutScore = r2Done ? projectedCutScore : null;
   // MC penalty only applies after R2 is complete
   const isMC = (name) => {
@@ -292,14 +292,14 @@ function App() {
 
   return (
     <div>
-      <header style={{background:"linear-gradient(135deg,#002d72 0%,#003d99 40%,#002d72 100%)",color:"#fff",textAlign:"center",paddingTop:32}}>
+      <header style={{background:"linear-gradient(135deg,#00205b 0%,#003087 40%,#00205b 100%)",color:"#fff",textAlign:"center",paddingTop:32}}>
         <div style={{paddingBottom:22}}>
           <div style={{fontSize:13,letterSpacing:8,opacity:.6,fontFamily:"'Playfair Display',serif"}}>2026</div>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4.5vw,38px)",fontWeight:900,letterSpacing:3,margin:"2px 0",lineHeight:1.1,textShadow:"0 2px 10px rgba(0,0,0,.3)"}}>PGA CHAMPIONSHIP</h1>
+          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4.5vw,38px)",fontWeight:900,letterSpacing:3,margin:"2px 0",lineHeight:1.1,textShadow:"0 2px 10px rgba(0,0,0,.3)"}}>US OPEN</h1>
           <div style={{fontSize:12,letterSpacing:6,fontWeight:600,opacity:.85,background:"rgba(255,255,255,.12)",display:"inline-block",padding:"3px 14px",borderRadius:2,marginTop:4}}>FANTASY CHALLENGE</div>
-          <div style={{marginTop:10,fontSize:10,letterSpacing:3,opacity:.5}}>ARONIMINK GOLF CLUB &nbsp;◆&nbsp; MAY 14–17 &nbsp;◆&nbsp; 10 TEAMS &nbsp;◆&nbsp; £10M BUDGET</div>
+          <div style={{marginTop:10,fontSize:10,letterSpacing:3,opacity:.5}}>SHINNECOCK HILLS &nbsp;◆&nbsp; JUNE 18–21 &nbsp;◆&nbsp; 10 TEAMS &nbsp;◆&nbsp; £10M BUDGET</div>
         </div>
-        <div style={{height:4,background:"linear-gradient(90deg,#c9a84c,#f0d68a,#c9a84c,#f0d68a,#c9a84c)"}}/>
+        <div style={{height:4,background:"linear-gradient(90deg,#cc0000,#ff4444,#cc0000,#ff4444,#cc0000)"}}/>
       </header>
 
       <div style={{maxWidth:860,margin:"0 auto",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
@@ -312,13 +312,13 @@ function App() {
           {msg && <span style={{fontSize:11,color:status==="error"?"#c0392b":"#888"}}>{msg}</span>}
         </div>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setAutoPoll(!autoPoll)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"1px solid #ccc",borderRadius:6,cursor:"pointer",background:autoPoll?"#002d72":"#fff",color:autoPoll?"#fff":"#555"}}>{autoPoll?"⏸ Pause":"▶ Live"}</button>
-          <button onClick={doFetch} disabled={status==="fetching"} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #002d72",borderRadius:6,cursor:"pointer",background:"#fff",color:"#002d72",opacity:status==="fetching"?.5:1}}>🏌️ Refresh</button>
+          <button onClick={()=>setAutoPoll(!autoPoll)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"1px solid #ccc",borderRadius:6,cursor:"pointer",background:autoPoll?"#00205b":"#fff",color:autoPoll?"#fff":"#555"}}>{autoPoll?"⏸ Pause":"▶ Live"}</button>
+          <button onClick={doFetch} disabled={status==="fetching"} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #00205b",borderRadius:6,cursor:"pointer",background:"#fff",color:"#00205b",opacity:status==="fetching"?.5:1}}>🏌️ Refresh</button>
         </div>
       </div>
 
       <div style={{maxWidth:860,margin:"0 auto",padding:"0 16px 16px"}}>
-        <button onClick={()=>setRulesOpen(!rulesOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:rulesOpen?"#002d72":"#fff",color:rulesOpen?"#c9a84c":"#002d72",border:"1px solid #002d72",borderRadius:6,cursor:"pointer",fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,letterSpacing:2}}>
+        <button onClick={()=>setRulesOpen(!rulesOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:rulesOpen?"#00205b":"#fff",color:rulesOpen?"#cc0000":"#00205b",border:"1px solid #00205b",borderRadius:6,cursor:"pointer",fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,letterSpacing:2}}>
           <span>RULES</span>
           <span style={{fontSize:12}}>{rulesOpen?"▲":"▼"}</span>
         </button>
@@ -341,7 +341,7 @@ function App() {
         {[["leaderboard","Leaderboard"],["npc","NPC Teams"]].map(([k,label])=>{
           const active=view===k;
           return (
-            <button key={k} onClick={()=>setView(k)} style={{flex:1,padding:"10px 14px",background:"transparent",border:"none",borderBottom:active?"3px solid #c9a84c":"3px solid transparent",marginBottom:-2,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:active?800:600,letterSpacing:2,color:active?"#002d72":"#999"}}>
+            <button key={k} onClick={()=>setView(k)} style={{flex:1,padding:"10px 14px",background:"transparent",border:"none",borderBottom:active?"3px solid #cc0000":"3px solid transparent",marginBottom:-2,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:active?800:600,letterSpacing:2,color:active?"#00205b":"#999"}}>
               {label.toUpperCase()}
             </button>
           );
@@ -354,11 +354,11 @@ function App() {
           {ranked.map((team,idx)=>{
             const pos=idx+1,isLeader=team.total!==null&&team.total===lv,isLast=!isLeader&&team.total!==null&&team.total===lastVal,open=expandedId===team.id;
             return(
-              <div key={team.id} onClick={()=>setExpandedId(open?null:team.id)} style={{background:"#fff",borderRadius:10,overflow:"hidden",cursor:"pointer",boxShadow:isLeader?"0 3px 20px rgba(201,168,76,.3)":"0 1px 8px rgba(0,0,0,.06)",border:isLeader?"2px solid #c9a84c":"1px solid #e8e4da"}}>
+              <div key={team.id} onClick={()=>setExpandedId(open?null:team.id)} style={{background:"#fff",borderRadius:10,overflow:"hidden",cursor:"pointer",boxShadow:isLeader?"0 3px 20px rgba(201,168,76,.3)":"0 1px 8px rgba(0,0,0,.06)",border:isLeader?"2px solid #cc0000":"1px solid #e8e4da"}}>
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr auto",alignItems:"center",padding:"14px 16px",gap:12,background:isLeader?"linear-gradient(90deg,#fdf8e8,#fff9e0)":"transparent"}}>
                   <div style={{width:38,height:38,borderRadius:"50%",background:isLeader?"transparent":"#f0ece2",color:"#555",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:isLeader||isLast?22:16}}>{isLeader?"🍆":isLast?"💩":pos}</div>
                   <div>
-                    <div style={{fontSize:16,fontWeight:700,color:"#002d72"}}>{team.name}</div>
+                    <div style={{fontSize:16,fontWeight:700,color:"#00205b"}}>{team.name}</div>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:isMobile?4:6,flexWrap:"wrap",marginTop:4}}>
                       {team.players.map((p,i)=>{
                         const thru=gThru(p.name);
@@ -394,7 +394,7 @@ function App() {
                       const showDivider=isIn;
                       return(
                         <React.Fragment key={i}>
-                        {showDivider&&<div style={{gridColumn:"1/-1",borderTop:"2px dashed #c9a84c",margin:"4px 0 2px 28px"}}/>}
+                        {showDivider&&<div style={{gridColumn:"1/-1",borderTop:"2px dashed #cc0000",margin:"4px 0 2px 28px"}}/>}
                         <div style={{display:"grid",gridTemplateColumns:"minmax(140px,1fr) repeat(4,42px) 48px 48px",gap:4,alignItems:"center",padding:"6px 0 6px 28px",borderBottom:!isIn&&i<team.players.length-1?"1px solid #eee":"none"}}>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:10,fontWeight:700,opacity:isOut?.5:1}}>{p.cost}</span>
@@ -449,7 +449,7 @@ function App() {
                 <div style={{padding:"10px 14px",display:"grid",gridTemplateColumns:"28px 1fr auto",gap:10,alignItems:"center"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:p.tier?costBg[p.tier]:"#ccc",color:"#fff",fontSize:11,fontWeight:700}}>{p.tier??"?"}</span>
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:(p.cut&&r2Done)?"#999":"#002d72"}}>{p.name}{p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>}</div>
+                    <div style={{fontSize:14,fontWeight:600,color:(p.cut&&r2Done)?"#999":"#00205b"}}>{p.name}{p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>}</div>
                     {p.owners.length>0 && (
                       <div style={{fontSize:11,color:"#888",marginTop:2}}>owned by {p.owners.map(o=>o.split(" ").pop()).join(" · ")}</div>
                     )}
@@ -498,7 +498,7 @@ function App() {
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr auto",alignItems:"center",padding:"14px 16px",gap:12}}>
                   <div style={{width:38,height:38,borderRadius:"50%",background:"#f0ece2",color:"#555",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16}}>{idx+1}</div>
                   <div>
-                    <div style={{fontSize:15,fontWeight:700,color:"#002d72"}}>
+                    <div style={{fontSize:15,fontWeight:700,color:"#00205b"}}>
                       {team.strategy} <span style={{fontSize:11,color:"#8b7355",fontWeight:600,letterSpacing:1,marginLeft:4}}>· {team.combo}</span>
                     </div>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:isMobile?4:6,flexWrap:"wrap",marginTop:4}}>
@@ -534,7 +534,7 @@ function App() {
                       const showDivider=isIn;
                       return(
                         <React.Fragment key={i}>
-                        {showDivider&&<div style={{gridColumn:"1/-1",borderTop:"2px dashed #c9a84c",margin:"4px 0 2px 28px"}}/>}
+                        {showDivider&&<div style={{gridColumn:"1/-1",borderTop:"2px dashed #cc0000",margin:"4px 0 2px 28px"}}/>}
                         <div style={{display:"grid",gridTemplateColumns:"minmax(140px,1fr) 44px repeat(4,42px) 48px 48px",gap:4,alignItems:"center",padding:"6px 0 6px 28px",borderBottom:!isIn&&i<team.players.length-1?"1px solid #eee":"none"}}>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:10,fontWeight:700,opacity:isOut?.5:1}}>{p.cost}</span>
