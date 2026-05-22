@@ -39,8 +39,46 @@ const TRANSFERS = [];
 const POLL_MS = 3 * 60 * 1000;
 const costBg = { 4: "#b91c1c", 3: "#1d4ed8", 2: "#15803d", 1: "#7e22ce" };
 
+// Editing windows (all times ET). mode: "build" = initial pick (whole roster);
+// "swap" = one-swap transfer. US Open 2026 \u2014 Shinnecock Hills, June 18\u201321.
+// Tee times are placeholders until the official R1/R3 schedule is published.
+const EDIT_WINDOWS = [
+  { open: new Date("2026-01-01T00:00:00-05:00"), close: new Date("2026-06-18T06:45:00-04:00"), label: "Team picks", mode: "build" },
+  // Post-R2 transfer window \u2014 close = first R3 tee time.
+  { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T07:45:00-04:00"), label: "Transfer window", mode: "swap" },
+];
+// Rosters stay hidden in the public list until the first tee time.
+const TOURNAMENT_START = new Date("2026-06-18T06:45:00-04:00");
+function tournamentHasStarted() { return new Date() >= TOURNAMENT_START; }
+// Order roster chips: highest tier first, swapped-in player last.
+function rosterDisplayOrder(players) {
+  return [...players].sort((a, b) => {
+    const aIn = a.role === "swapped-in" ? 1 : 0, bIn = b.role === "swapped-in" ? 1 : 0;
+    if (aIn !== bIn) return aIn - bIn;
+    return (b.cost || 0) - (a.cost || 0);
+  });
+}
+function editingStatus() {
+  const now = new Date();
+  for (const w of EDIT_WINDOWS) {
+    if (now >= w.open && now < w.close) return { allowed: true, label: w.label, mode: w.mode };
+  }
+  // Find next window
+  const next = EDIT_WINDOWS.find(w => now < w.open);
+  if (next) return { allowed: false, label: `Locked until ${next.label.toLowerCase()}`, mode: null };
+  return { allowed: false, label: "Editing closed", mode: null };
+}
+
 function normalize(n) {
-  return n.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
+  // Map atomic non-ASCII letters that NFD won't decompose (\u00f8, \u00e6, \u0142, \u0111, \u00df, \u00f0).
+  const mapped = n
+    .replace(/\u00f8/g,"o").replace(/\u00d8/g,"O")
+    .replace(/\u00e6/g,"ae").replace(/\u00c6/g,"AE")
+    .replace(/\u0142/g,"l").replace(/\u0141/g,"L")
+    .replace(/\u0111/g,"d").replace(/\u0110/g,"D")
+    .replace(/\u00f0/g,"d").replace(/\u00d0/g,"D")
+    .replace(/\u00df/g,"ss");
+  return mapped.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
 }
 
 const PRICE_TIERS = {
@@ -72,13 +110,7 @@ function getTier(apiName) {
   }
   return null;
 }
-function teamsOwning(apiName) {
-  const out = [];
-  for (const t of TEAMS) {
-    if (t.players.some(p => nameMatches(p.name, apiName))) out.push(t.name);
-  }
-  return out;
-}
+// teamsOwning is defined inside App() so it can use dynamic rosters
 
 function App() {
   const [players, setPlayers] = useState({});
@@ -91,6 +123,19 @@ function App() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [view, setView] = useState("leaderboard");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 480);
+  // Team picker state
+  const [teamRosters, setTeamRosters] = useState({});
+  const [apiTransfers, setApiTransfers] = useState({});
+  const [swapsPending, setSwapsPending] = useState({});
+  const [pickOpen, setPickOpen] = useState(false);
+  const [pickStep, setPickStep] = useState("pin"); // pin | edit
+  const [pickTeamId, setPickTeamId] = useState(null);
+  const [pickPin, setPickPin] = useState("");
+  const [pickPlayers, setPickPlayers] = useState([]);
+  const [pickOriginalRoster, setPickOriginalRoster] = useState([]); // canonical roster for swap-mode diff display
+  const [pickPendingTransfer, setPickPendingTransfer] = useState(null);
+  const [pickError, setPickError] = useState("");
+  const [pickSaving, setPickSaving] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 479px)");
     const h = (e) => setIsMobile(e.matches);
@@ -98,6 +143,35 @@ function App() {
     return () => mq.removeEventListener("change", h);
   }, []);
   const intervalRef = useRef(null);
+
+  // Load rosters + transfers from Redis (transfers are redacted server-side
+  // until the swap window has closed at first R3 tee time)
+  const fetchRosters = useCallback(async () => {
+    try {
+      const res = await fetch("/api/teams");
+      if (res.ok) {
+        const data = await res.json();
+        setTeamRosters(data.teams || {});
+        setApiTransfers(data.transfers || {});
+        setSwapsPending(data.swapsPending || {});
+      }
+    } catch (e) {}
+  }, []);
+  useEffect(() => { fetchRosters(); }, [fetchRosters]);
+
+  // Merge Redis rosters into TEAMS
+  const teamsWithRosters = TEAMS.map(t => ({
+    ...t,
+    players: (teamRosters[t.id] && teamRosters[t.id].length > 0) ? teamRosters[t.id] : t.players,
+  }));
+
+  function teamsOwning(apiName) {
+    const out = [];
+    for (const t of teamsWithRosters) {
+      if (t.players.some(p => nameMatches(p.name, apiName))) out.push(t.name);
+    }
+    return out;
+  }
 
   const findScore = useCallback((ourName) => {
     if (players[ourName]) return players[ourName];
@@ -124,7 +198,7 @@ function App() {
       setPlayers(map);
       setLastUpdated(new Date());
       setStatus("success");
-      setMsg(`${data.playerCount} players via ${data.source}`);
+      setMsg(data.status === "not-started" ? "Tournament not started" : `${data.playerCount} players via ${data.source}`);
     } catch (e) {
       setStatus("error");
       setMsg(e.message);
@@ -195,8 +269,11 @@ function App() {
   };
 
   // Build effective roster with roles
+  // Transfer source: Redis-backed apiTransfers (only populated after the swap
+  // window closes at first R3 tee time) with a fallback to the hardcoded
+  // TRANSFERS const for NPC/historic teams.
   const buildRoster = (team) => {
-    const tx = TRANSFERS.find(t => t.teamId === team.id);
+    const tx = apiTransfers[team.id] || TRANSFERS.find(t => t.teamId === team.id);
     return team.players.map(p => {
       if (tx && nameMatches(p.name, tx.out)) return { ...p, role: "swapped-out" };
       if (isMC(p.name) && !tx?.out) return { ...p, role: "mc" };
@@ -247,7 +324,7 @@ function App() {
     return roster.filter(p => p.role !== "swapped-out").map(p => playerContribution(p.name, p.role || "original") ?? Infinity).sort((a, b) => a - b);
   };
 
-  const ranked = [...TEAMS].map(t => {
+  const ranked = [...teamsWithRosters].map(t => {
     const roster = buildRoster(t);
     return { ...t, roster, players: roster, total: null };
   }).map(t => ({ ...t, total: tTot(t) })).sort((a, b) => {
@@ -290,6 +367,97 @@ function App() {
   });
   const cutIndex = fieldPlayers.findIndex(p=>p.cut);
 
+  // --- Team Picker helpers ---
+  const allFieldPlayers = [4,3,2,1].flatMap(tier =>
+    PRICE_TIERS[tier].map(name => ({ name, cost: tier }))
+  );
+
+  const pickBudget = pickPlayers.reduce((s, p) => s + p.cost, 0);
+  const pickTier4 = pickPlayers.filter(p => p.cost === 4).length;
+  const pickTier3 = pickPlayers.filter(p => p.cost === 3).length;
+  const pickValid = pickPlayers.length === 4 && pickBudget <= 10 && pickTier4 <= 1 && pickTier3 <= 2;
+
+  const togglePlayer = (name, cost) => {
+    setPickError("");
+    const exists = pickPlayers.find(p => p.name === name);
+    if (exists) {
+      setPickPlayers(pickPlayers.filter(p => p.name !== name));
+    } else {
+      if (pickPlayers.length >= 4) return;
+      setPickPlayers([...pickPlayers, { name, cost }]);
+    }
+  };
+
+  const openPicker = () => {
+    setPickOpen(true);
+    setPickStep("pin");
+    setPickTeamId(null);
+    setPickPin("");
+    setPickPlayers([]);
+    setPickOriginalRoster([]);
+    setPickPendingTransfer(null);
+    setPickError("");
+    setPickSaving(false);
+  };
+
+  const submitPin = async () => {
+    setPickError("");
+    try {
+      const res = await fetch("/api/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pickPin }),
+      });
+      const data = await res.json();
+      if (data.status === "verified") {
+        setPickTeamId(data.teamId);
+        setPickStep("edit");
+        const original = (data.roster && data.roster.length > 0) ? data.roster : (teamRosters[data.teamId] || []);
+        setPickOriginalRoster(original);
+        setPickPendingTransfer(data.transfer || null);
+        // Show the EFFECTIVE roster (original with any pending swap applied) so the
+        // participant can keep swapping or revert.
+        let effective = original;
+        if (data.transfer && original.length > 0) {
+          effective = original.map(p => nameMatches(p.name, data.transfer.out)
+            ? { name: data.transfer.in, cost: data.transfer.inCost }
+            : p);
+        }
+        if (effective.length > 0) setPickPlayers(effective);
+      } else {
+        setPickError("Invalid PIN.");
+      }
+    } catch (e) {
+      setPickError("Network error");
+    }
+  };
+
+  const submitTeam = async () => {
+    setPickError("");
+    if (!pickValid) {
+      setPickError("Team doesn't meet the rules — check constraints above.");
+      return;
+    }
+    setPickSaving(true);
+    try {
+      const res = await fetch("/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: pickTeamId, pin: pickPin, players: pickPlayers }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchRosters();
+        setPickOpen(false);
+      } else {
+        setPickError(data.details ? data.details.join(", ") : data.error);
+      }
+    } catch (e) {
+      setPickError("Network error");
+    }
+    setPickSaving(false);
+  };
+
   return (
     <div>
       <header style={{background:"linear-gradient(135deg,#00205b 0%,#003087 40%,#00205b 100%)",color:"#fff",textAlign:"center",paddingTop:32}}>
@@ -314,6 +482,11 @@ function App() {
         <div style={{display:"flex",gap:6}}>
           <button onClick={()=>setAutoPoll(!autoPoll)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"1px solid #ccc",borderRadius:6,cursor:"pointer",background:autoPoll?"#00205b":"#fff",color:autoPoll?"#fff":"#555"}}>{autoPoll?"⏸ Pause":"▶ Live"}</button>
           <button onClick={doFetch} disabled={status==="fetching"} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #00205b",borderRadius:6,cursor:"pointer",background:"#fff",color:"#00205b",opacity:status==="fetching"?.5:1}}>🏌️ Refresh</button>
+          {(()=>{const es=editingStatus();return es.allowed?(
+            <button onClick={openPicker} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #cc0000",borderRadius:6,cursor:"pointer",background:"#cc0000",color:"#fff"}}>✏️ Pick / Edit Team</button>
+          ):(
+            <span style={{fontSize:11,color:"#999",fontStyle:"italic",padding:"6px 0"}}>{es.label}</span>
+          );})()}
         </div>
       </div>
 
@@ -358,9 +531,16 @@ function App() {
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr auto",alignItems:"center",padding:"14px 16px",gap:12,background:isLeader?"linear-gradient(90deg,#fdf8e8,#fff9e0)":"transparent"}}>
                   <div style={{width:38,height:38,borderRadius:"50%",background:isLeader?"transparent":"#f0ece2",color:"#555",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:isLeader||isLast?22:16}}>{isLeader?"🍆":isLast?"💩":pos}</div>
                   <div>
-                    <div style={{fontSize:16,fontWeight:700,color:"#00205b"}}>{team.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <span style={{fontSize:16,fontWeight:700,color:"#00205b"}}>{team.name}</span>
+                      {swapsPending[team.id] && (
+                        <span style={{fontSize:9,fontWeight:700,letterSpacing:1,color:"#7a1414",background:"#fdeaea",border:"1px solid #cc0000",padding:"2px 6px",borderRadius:10}}>🔒 SWAP HIDDEN</span>
+                      )}
+                    </div>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:isMobile?4:6,flexWrap:"wrap",marginTop:4}}>
-                      {team.players.map((p,i)=>{
+                      {!tournamentHasStarted()?(
+                        <span style={{fontSize:11,color:"#999",fontStyle:"italic"}}>🔒 Roster hidden until the first tee time</span>
+                      ):rosterDisplayOrder(team.players).map((p,i)=>{
                         const thru=gThru(p.name);
 
                         const isOut=p.role==="swapped-out", isIn=p.role==="swapped-in", isMc=p.role==="mc";
@@ -382,13 +562,15 @@ function App() {
                 </div>
                 {open&&(
                   <div style={{borderTop:"1px solid #eee",background:"#fafaf5",overflowX:"auto"}} onClick={e=>e.stopPropagation()}>
+                   {!tournamentHasStarted()?(
+                    <div style={{padding:"18px 16px",fontSize:12,color:"#999",fontStyle:"italic",textAlign:"center"}}>🔒 Rosters are revealed when the tournament starts. Until then, only you can see your own team — log in via "Pick / Edit Team".</div>
+                   ):(
                    <div style={{padding:"12px 16px",minWidth:440}}>
                     <div style={{display:"grid",gridTemplateColumns:"minmax(140px,1fr) repeat(4,42px) 48px 48px",gap:4,fontSize:10,fontWeight:700,color:"#888",letterSpacing:1,marginBottom:6,paddingLeft:28}}>
                       <span/>{[1,2,3,4].map(r=><span key={r} style={{textAlign:"center"}}>R{r}</span>)}<span style={{textAlign:"center"}}>TOT</span><span style={{textAlign:"center"}}>THRU</span>
                     </div>
-                    {team.players.map((p,i)=>{
+                    {rosterDisplayOrder(team.players).map((p,i)=>{
                       const s=findScore(p.name)||{};const cr=correctedRounds(findScore(p.name));const thru=gThru(p.name);
-                      const wheelchair=team.id===4&&p.name==="Fred Couples";
                       const isOut=p.role==="swapped-out", isIn=p.role==="swapped-in", isMc=p.role==="mc";
                       const contrib=playerContribution(p.name, p.role||"original");
                       const showDivider=isIn;
@@ -399,7 +581,7 @@ function App() {
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:10,fontWeight:700,opacity:isOut?.5:1}}>{p.cost}</span>
                             <div>
-                              <span style={{fontSize:13,fontWeight:600,textDecoration:isOut?"line-through":"none",opacity:isOut?.5:1}}>{p.name}{wheelchair&&<span style={{fontSize:"1.4em",marginLeft:3,verticalAlign:"middle"}}>🪦 RIP</span>}</span>
+                              <span style={{fontSize:13,fontWeight:600,textDecoration:isOut?"line-through":"none",opacity:isOut?.5:1}}>{p.name}</span>
                               {isIn&&<span style={{fontSize:9,fontWeight:700,color:"#15803d",marginLeft:4}}>↑IN</span>}
                               {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:4}}>MC</span>}
                               {isMc&&<div style={{fontSize:10,color:"#ea580c",fontStyle:"italic",marginTop:1}}>R3/R4 = worst active round score</div>}
@@ -418,6 +600,7 @@ function App() {
                       );
                     })}
                    </div>
+                   )}
                   </div>
                 )}
               </div>
@@ -566,6 +749,128 @@ function App() {
           })}
         </div>
       </section>
+      )}
+
+      {/* Team Picker Modal */}
+      {pickOpen && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setPickOpen(false)}>
+          <div style={{background:"#fff",borderRadius:12,maxWidth:480,width:"100%",maxHeight:"90vh",overflow:"auto",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"20px 24px",borderBottom:"1px solid #eee",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:"#00205b",margin:0}}>
+                {pickStep==="pin"?"Enter PIN":`${TEAMS.find(t=>t.id===pickTeamId)?.name} — ${editingStatus().mode==="swap"?"Transfer":(pickPlayers.length>0?"Edit Roster":"Build Roster")}`}
+              </h2>
+              <button onClick={()=>setPickOpen(false)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999",lineHeight:1}}>×</button>
+            </div>
+
+            <div style={{padding:"20px 24px"}}>
+              {/* Step 1: PIN entry */}
+              {pickStep==="pin" && (
+                <div>
+                  <div style={{fontSize:12,color:"#999",marginBottom:16}}>
+                    Enter the 4-digit PIN you were given. You can come back here to edit your team any time until the first tee time.
+                  </div>
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={pickPin}
+                    onChange={e=>setPickPin(e.target.value.replace(/\D/g,"").slice(0,4))}
+                    onKeyDown={e=>{if(e.key==="Enter"&&pickPin.length===4)submitPin();}}
+                    style={{width:"100%",padding:"12px 16px",fontSize:24,fontWeight:700,textAlign:"center",letterSpacing:12,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                    autoFocus
+                  />
+                  {pickError && <div style={{color:"#dc2626",fontSize:12,marginTop:8}}>{pickError}</div>}
+                  <div style={{marginTop:16}}>
+                    <button onClick={submitPin} disabled={pickPin.length!==4}
+                      style={{width:"100%",padding:"12px",background:pickPin.length===4?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickPin.length===4?"pointer":"default",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Continue</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Team editor */}
+              {pickStep==="edit" && (
+                <div>
+                  {/* Transfer-window guidance — only during swap mode */}
+                  {editingStatus().mode==="swap" && (
+                    <div style={{marginBottom:16,padding:"12px 14px",background:"#eef2f9",border:"1px solid #cdd9ec",borderRadius:8,fontSize:12,lineHeight:1.5,color:"#334155"}}>
+                      <div style={{fontWeight:700,letterSpacing:1,fontSize:11,color:"#00205b",marginBottom:6}}>TRANSFER WINDOW</div>
+                      You may swap <strong>exactly one</strong> player for another of <strong>equal or lower value</strong>. The dropped player keeps their R1/R2 score; the new player only contributes R3/R4.
+                      {pickPendingTransfer && (
+                        <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #cdd9ec"}}>
+                          <strong>Your current swap:</strong> {pickPendingTransfer.out} (£{pickPendingTransfer.outCost}m) → {pickPendingTransfer.in} (£{pickPendingTransfer.inCost}m). Re-submit your original 4 to revert, or change the swap below.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Constraint tracker */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16,padding:"12px",background:"#f8f6f0",borderRadius:8,fontSize:12,textAlign:"center"}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:18,color:pickPlayers.length===4?"#15803d":pickPlayers.length>4?"#dc2626":"#00205b"}}>{pickPlayers.length}/4</div>
+                      <div style={{color:"#888",marginTop:2}}>Players</div>
+                    </div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:18,color:pickBudget>10?"#dc2626":pickBudget===10?"#15803d":"#00205b"}}>£{pickBudget}m</div>
+                      <div style={{color:"#888",marginTop:2}}>of £10m</div>
+                    </div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:18,color:pickTier4>1?"#dc2626":"#00205b"}}>{pickTier4}/1</div>
+                      <div style={{color:"#888",marginTop:2}}>£4m max</div>
+                    </div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:18,color:pickTier3>2?"#dc2626":"#00205b"}}>{pickTier3}/2</div>
+                      <div style={{color:"#888",marginTop:2}}>£3m max</div>
+                    </div>
+                  </div>
+
+                  {/* Currently selected — tap to remove */}
+                  {pickPlayers.length>0 && (
+                    <div style={{marginBottom:16,padding:"12px",background:"#eef2f9",border:"1px solid #cdd9ec",borderRadius:8}}>
+                      <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"#666",marginBottom:8}}>YOUR TEAM — TAP TO REMOVE</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        {rosterDisplayOrder(pickPlayers).map(p=>(
+                          <button key={p.name} onClick={()=>togglePlayer(p.name,p.cost)}
+                            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"#00205b",color:"#fff",border:"1px solid #00205b",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700}}>
+                            <span>✕ {p.name}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:"#ff6b6b"}}>£{p.cost}m</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Player list by tier */}
+                  {allFieldPlayers.length===0 ? (
+                    <div style={{padding:"24px 12px",textAlign:"center",fontSize:12,color:"#999",fontStyle:"italic"}}>The US Open field hasn't been announced yet — player tiers will appear here once they're set.</div>
+                  ) : [4,3,2,1].map(tier=>(
+                    <div key={tier} style={{marginBottom:12}}>
+                      <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"#888",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:costBg[tier],color:"#fff",fontSize:9,fontWeight:700}}>£{tier}</span>
+                        {tier===4?"PREMIUM":tier===3?"ELITE":tier===2?"MID-RANGE":"VALUE"}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        {PRICE_TIERS[tier].map(name=>{
+                          const selected=pickPlayers.some(p=>p.name===name);
+                          const disabled=!selected&&pickPlayers.length>=4;
+                          return(
+                            <button key={name} onClick={()=>!disabled&&togglePlayer(name,tier)}
+                              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:selected?"#00205b":"#fff",color:selected?"#fff":"#333",border:selected?"1px solid #00205b":"1px solid #e8e4da",borderRadius:8,cursor:disabled?"default":"pointer",opacity:disabled?.4:1,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:selected?700:500,transition:"all .15s"}}>
+                              <span>{name}</span>
+                              <span style={{fontSize:11,fontWeight:700,color:selected?"#ff6b6b":"#888"}}>£{tier}m</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {pickError && <div style={{color:"#dc2626",fontSize:12,marginBottom:8}}>{pickError}</div>}
+                  <div style={{display:"flex",gap:8,marginTop:8,position:"sticky",bottom:0,background:"#fff",padding:"12px 0"}}>
+                    <button onClick={()=>setPickOpen(false)}
+                      style={{flex:1,padding:"12px",background:"#f0ece2",border:"1px solid #e8e4da",borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",color:"#555"}}>Cancel</button>
+                    <button onClick={submitTeam} disabled={!pickValid||pickSaving}
+                      style={{flex:2,padding:"12px",background:pickValid?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickValid?"pointer":"default",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{pickSaving?"Saving…":(editingStatus().mode==="swap"?"Save Swap":"Save Team")}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <footer style={{textAlign:"center",padding:"20px 16px 28px",fontSize:11,color:"#bbb",letterSpacing:2,fontStyle:"italic"}}>A tradition unlike any other™</footer>
