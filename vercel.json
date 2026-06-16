@@ -2,5 +2,13 @@
   "rewrites": [
     { "source": "/api/scores", "destination": "/api/scores" },
     { "source": "/(.*)", "destination": "/public/$1" }
+  ],
+  "headers": [
+    {
+      "source": "/methodology.md",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    }
   ]
 }
