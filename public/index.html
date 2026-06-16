@@ -20,16 +20,9 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 const TEAMS = [
-  { id: 0, name: "Adam Rowden", players: [] },
-  { id: 1, name: "Dave Gregory", players: [] },
-  { id: 2, name: "Tom Seymour", players: [] },
-  { id: 3, name: "Ludo Webb", players: [] },
-  { id: 4, name: "Louis Browne", players: [] },
-  { id: 5, name: "Will Emerson", players: [] },
-  { id: 6, name: "Darren Teague", players: [] },
-  { id: 7, name: "Dan Harris", players: [] },
-  { id: 8, name: "Dave Hudson", players: [] },
   { id: 9, name: "Grant Reed", players: [] },
+  { id: 5, name: "Will Emerson", players: [] },
+  { id: 3, name: "Ludo Webb", players: [] },
 ];
 
 const NPC_TEAMS = [];
@@ -714,7 +707,7 @@ function App() {
       </div>
 
       <div style={{maxWidth:860,margin:"0 auto",padding:"0 16px",display:"flex",gap:0,borderBottom:"2px solid #e8e4da"}}>
-        {[["leaderboard","Leaderboard"],["npc","NPC Teams"]].map(([k,label])=>{
+        {[["leaderboard","Leaderboard"],["players","Players"],["npc","NPC Teams"]].map(([k,label])=>{
           const active=view===k;
           return (
             <button key={k} onClick={()=>setView(k)} style={{flex:1,padding:"10px 14px",background:"transparent",border:"none",borderBottom:active?"3px solid #cc0000":"3px solid transparent",marginBottom:-2,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:active?800:600,letterSpacing:2,color:active?"#00205b":"#999"}}>
