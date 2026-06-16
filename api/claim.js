@@ -18,8 +18,9 @@ export default async function handler(req, res) {
   if (!code || !pin) {
     return res.status(400).json({ error: "code and pin are required" });
   }
-  if (!/^\d{4}$/.test(String(pin))) {
-    return res.status(400).json({ error: "PIN must be exactly 4 digits" });
+  // PIN or passphrase: at least 4 characters, any characters allowed.
+  if (String(pin).length < 4 || String(pin).length > 128) {
+    return res.status(400).json({ error: "PIN/passphrase must be 4–128 characters" });
   }
 
   const codeHash = hashSecret(String(code).trim());

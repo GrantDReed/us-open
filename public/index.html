@@ -623,7 +623,7 @@ function App() {
 
   const submitClaim = async () => {
     setPickError("");
-    if (claimPin.length !== 4) { setPickError("Choose a 4-digit PIN."); return; }
+    if (claimPin.length < 4) { setPickError("Choose a PIN or passphrase of at least 4 characters."); return; }
     if (claimPin !== claimPin2) { setPickError("PINs don't match."); return; }
     if (!claimCode.trim()) { setPickError("Enter your claim code."); return; }
     try {
@@ -1012,18 +1012,18 @@ function App() {
               {pickStep==="pin" && !claimMode && (
                 <div>
                   <div style={{fontSize:12,color:"#999",marginBottom:16}}>
-                    Enter your 4-digit PIN. You can come back here to edit your team any time until the first tee time.
+                    Enter your PIN or passphrase. You can come back here to edit your team any time until the first tee time.
                   </div>
-                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={pickPin}
-                    onChange={e=>setPickPin(e.target.value.replace(/\D/g,"").slice(0,4))}
-                    onKeyDown={e=>{if(e.key==="Enter"&&pickPin.length===4)submitPin();}}
-                    style={{width:"100%",padding:"12px 16px",fontSize:24,fontWeight:700,textAlign:"center",letterSpacing:12,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                  <input type="password" maxLength={128} placeholder="PIN or passphrase" value={pickPin}
+                    onChange={e=>setPickPin(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&pickPin.length>=4)submitPin();}}
+                    style={{width:"100%",padding:"12px 16px",fontSize:20,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
                     autoFocus
                   />
                   {pickError && <div style={{color:"#dc2626",fontSize:12,marginTop:8}}>{pickError}</div>}
                   <div style={{marginTop:16}}>
-                    <button onClick={submitPin} disabled={pickPin.length!==4}
-                      style={{width:"100%",padding:"12px",background:pickPin.length===4?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickPin.length===4?"pointer":"default",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Continue</button>
+                    <button onClick={submitPin} disabled={pickPin.length<4}
+                      style={{width:"100%",padding:"12px",background:pickPin.length>=4?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickPin.length>=4?"pointer":"default",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Continue</button>
                   </div>
                   <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #eee",textAlign:"center"}}>
                     <button onClick={()=>{setClaimMode(true);setPickError("");}}
@@ -1038,7 +1038,7 @@ function App() {
               {pickStep==="pin" && claimMode && (
                 <div>
                   <div style={{fontSize:12,color:"#555",marginBottom:16,lineHeight:1.5}}>
-                    Enter the <strong>one-time claim code</strong> you were given, then choose your own 4-digit PIN. The code works once — after this you'll log in with your PIN. <em>Nobody else (not even the organiser) can see your PIN.</em>
+                    Enter the <strong>one-time claim code</strong> you were given, then choose your own PIN or passphrase (at least 4 characters — digits, letters, anything). The code works once — after this you'll log in with what you chose. <em>Nobody else (not even the organiser) can see it.</em>
                   </div>
                   <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CLAIM CODE</label>
                   <input type="text" autoCapitalize="characters" placeholder="claim code" value={claimCode}
@@ -1046,21 +1046,21 @@ function App() {
                     style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:3,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14,textTransform:"uppercase"}}
                     autoFocus
                   />
-                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CHOOSE A 4-DIGIT PIN</label>
-                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={claimPin}
-                    onChange={e=>setClaimPin(e.target.value.replace(/\D/g,"").slice(0,4))}
-                    style={{width:"100%",padding:"12px 14px",fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:10,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14}}
+                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CHOOSE A PIN OR PASSPHRASE (4+ CHARACTERS)</label>
+                  <input type="password" maxLength={128} placeholder="PIN or passphrase" value={claimPin}
+                    onChange={e=>setClaimPin(e.target.value)}
+                    style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14}}
                   />
-                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CONFIRM PIN</label>
-                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={claimPin2}
-                    onChange={e=>setClaimPin2(e.target.value.replace(/\D/g,"").slice(0,4))}
+                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CONFIRM</label>
+                  <input type="password" maxLength={128} placeholder="re-enter PIN or passphrase" value={claimPin2}
+                    onChange={e=>setClaimPin2(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter")submitClaim();}}
-                    style={{width:"100%",padding:"12px 14px",fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:10,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4}}
+                    style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4}}
                   />
                   {pickError && <div style={{color:"#dc2626",fontSize:12,marginTop:10}}>{pickError}</div>}
                   <div style={{marginTop:16}}>
-                    <button onClick={submitClaim} disabled={!claimCode.trim()||claimPin.length!==4||claimPin2.length!==4}
-                      style={{width:"100%",padding:"12px",background:(claimCode.trim()&&claimPin.length===4&&claimPin2.length===4)?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Claim team &amp; set PIN</button>
+                    <button onClick={submitClaim} disabled={!claimCode.trim()||claimPin.length<4||claimPin2.length<4}
+                      style={{width:"100%",padding:"12px",background:(claimCode.trim()&&claimPin.length>=4&&claimPin2.length>=4)?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Claim team &amp; set PIN</button>
                   </div>
                   <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #eee",textAlign:"center"}}>
                     <button onClick={()=>{setClaimMode(false);setPickError("");}}
