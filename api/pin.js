@@ -1,10 +1,8 @@
-import { createHash } from "crypto";
 import { redis } from "./redis.js";
+import { hashSecret, hashEquals } from "./crypto-util.js";
 
-const hashPin = (pin) =>
-  createHash("sha256").update(String(pin)).digest("hex");
-
-const TEAM_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+// Active participants only (Grant=9, Will Emerson=5, Ludo=3).
+const TEAM_IDS = [3, 5, 9];
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -18,12 +16,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "pin is required" });
   }
 
-  const hash = hashPin(pin);
+  const hash = hashSecret(pin);
 
   // Scan all teams to find which PIN matches
   for (const id of TEAM_IDS) {
     const stored = await redis.get(`pin:${id}`);
-    if (stored === hash) {
+    if (stored && hashEquals(stored, hash)) {
       const raw = await redis.get(`roster:${id}`);
       const roster = raw ? JSON.parse(raw) : [];
       const tRaw = await redis.get(`transfer:${id}`);

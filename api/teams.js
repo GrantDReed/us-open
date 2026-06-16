@@ -1,8 +1,5 @@
-import { createHash } from "crypto";
 import { redis } from "./redis.js";
-
-const hashPin = (pin) =>
-  createHash("sha256").update(String(pin)).digest("hex");
+import { hashSecret, hashEquals } from "./crypto-util.js";
 
 // Active participants only (Grant=9, Will Emerson=5, Ludo=3). Must match the
 // TEAMS list in public/index.html. Draft uniqueness is enforced across these.
@@ -316,7 +313,7 @@ export default async function handler(req, res) {
   if (!storedHash) {
     return res.status(401).json({ error: "PIN not set. Set your PIN first." });
   }
-  if (storedHash !== hashPin(pin)) {
+  if (!hashEquals(storedHash, hashSecret(pin))) {
     return res.status(401).json({ error: "Invalid PIN" });
   }
 

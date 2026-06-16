@@ -19,4 +19,7 @@ export const redis = {
   set: (key, value) => cmd("SET", key, value),
   del: (key) => cmd("DEL", key),
   keys: (pattern) => cmd("KEYS", pattern),
+  // Atomic read-and-delete (Redis 6.2+). Used to consume single-use claim codes
+  // so two redemptions of the same code can't both succeed.
+  getdel: (key) => cmd("GETDEL", key),
 };

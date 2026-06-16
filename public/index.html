@@ -289,6 +289,11 @@ function App() {
   const [pickPendingTransfer, setPickPendingTransfer] = useState(null);
   const [pickError, setPickError] = useState("");
   const [pickSaving, setPickSaving] = useState(false);
+  // First-run claim flow: redeem a single-use claim code to set your own PIN.
+  const [claimMode, setClaimMode] = useState(false);
+  const [claimCode, setClaimCode] = useState("");
+  const [claimPin, setClaimPin] = useState("");
+  const [claimPin2, setClaimPin2] = useState("");
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 479px)");
     const h = (e) => setIsMobile(e.matches);
@@ -572,6 +577,29 @@ function App() {
     setPickPendingTransfer(null);
     setPickError("");
     setPickSaving(false);
+    setClaimMode(false);
+    setClaimCode("");
+    setClaimPin("");
+    setClaimPin2("");
+  };
+
+  // Shared: a verified PIN or redeemed claim code both return { teamId, roster,
+  // transfer }. Move into the editor with the effective roster loaded.
+  const enterEditor = (data) => {
+    setPickTeamId(data.teamId);
+    setPickStep("edit");
+    const original = (data.roster && data.roster.length > 0) ? data.roster : (teamRosters[data.teamId] || []);
+    setPickOriginalRoster(original);
+    setPickPendingTransfer(data.transfer || null);
+    // Show the EFFECTIVE roster (original with any pending swap applied) so the
+    // participant can keep swapping or revert.
+    let effective = original;
+    if (data.transfer && original.length > 0) {
+      effective = original.map(p => nameMatches(p.name, data.transfer.out)
+        ? { name: data.transfer.in, cost: data.transfer.inCost }
+        : p);
+    }
+    if (effective.length > 0) setPickPlayers(effective);
   };
 
   const submitPin = async () => {
@@ -584,22 +612,33 @@ function App() {
       });
       const data = await res.json();
       if (data.status === "verified") {
-        setPickTeamId(data.teamId);
-        setPickStep("edit");
-        const original = (data.roster && data.roster.length > 0) ? data.roster : (teamRosters[data.teamId] || []);
-        setPickOriginalRoster(original);
-        setPickPendingTransfer(data.transfer || null);
-        // Show the EFFECTIVE roster (original with any pending swap applied) so the
-        // participant can keep swapping or revert.
-        let effective = original;
-        if (data.transfer && original.length > 0) {
-          effective = original.map(p => nameMatches(p.name, data.transfer.out)
-            ? { name: data.transfer.in, cost: data.transfer.inCost }
-            : p);
-        }
-        if (effective.length > 0) setPickPlayers(effective);
+        enterEditor(data);
       } else {
         setPickError("Invalid PIN.");
+      }
+    } catch (e) {
+      setPickError("Network error");
+    }
+  };
+
+  const submitClaim = async () => {
+    setPickError("");
+    if (claimPin.length !== 4) { setPickError("Choose a 4-digit PIN."); return; }
+    if (claimPin !== claimPin2) { setPickError("PINs don't match."); return; }
+    if (!claimCode.trim()) { setPickError("Enter your claim code."); return; }
+    try {
+      const res = await fetch("/api/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: claimCode.trim(), pin: claimPin }),
+      });
+      const data = await res.json();
+      if (res.ok && data.status === "claimed") {
+        // Remember the freshly-set PIN so subsequent saves authenticate.
+        setPickPin(claimPin);
+        enterEditor(data);
+      } else {
+        setPickError(data.error || "Couldn't redeem that claim code.");
       }
     } catch (e) {
       setPickError("Network error");
@@ -963,17 +1002,17 @@ function App() {
           <div style={{background:"#fff",borderRadius:12,maxWidth:480,width:"100%",maxHeight:"90vh",overflow:"auto",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"20px 24px",borderBottom:"1px solid #eee",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:"#00205b",margin:0}}>
-                {pickStep==="pin"?"Enter PIN":`${TEAMS.find(t=>t.id===pickTeamId)?.name} — ${editingStatus().mode==="swap"?"Transfer":(pickPlayers.length>0?"Edit Roster":"Build Roster")}`}
+                {pickStep==="pin"?(claimMode?"Claim Your Team":"Enter PIN"):`${TEAMS.find(t=>t.id===pickTeamId)?.name} — ${editingStatus().mode==="swap"?"Transfer":(pickPlayers.length>0?"Edit Roster":"Build Roster")}`}
               </h2>
               <button onClick={()=>setPickOpen(false)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999",lineHeight:1}}>×</button>
             </div>
 
             <div style={{padding:"20px 24px"}}>
-              {/* Step 1: PIN entry */}
-              {pickStep==="pin" && (
+              {/* Step 1a: returning user — PIN entry */}
+              {pickStep==="pin" && !claimMode && (
                 <div>
                   <div style={{fontSize:12,color:"#999",marginBottom:16}}>
-                    Enter the 4-digit PIN you were given. You can come back here to edit your team any time until the first tee time.
+                    Enter your 4-digit PIN. You can come back here to edit your team any time until the first tee time.
                   </div>
                   <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={pickPin}
                     onChange={e=>setPickPin(e.target.value.replace(/\D/g,"").slice(0,4))}
@@ -985,6 +1024,49 @@ function App() {
                   <div style={{marginTop:16}}>
                     <button onClick={submitPin} disabled={pickPin.length!==4}
                       style={{width:"100%",padding:"12px",background:pickPin.length===4?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickPin.length===4?"pointer":"default",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Continue</button>
+                  </div>
+                  <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #eee",textAlign:"center"}}>
+                    <button onClick={()=>{setClaimMode(true);setPickError("");}}
+                      style={{background:"none",border:"none",cursor:"pointer",fontSize:12.5,color:"#00205b",fontWeight:600,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}}>
+                      First time? Set up your team with a claim code
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 1b: first-time setup — redeem claim code + choose a PIN */}
+              {pickStep==="pin" && claimMode && (
+                <div>
+                  <div style={{fontSize:12,color:"#555",marginBottom:16,lineHeight:1.5}}>
+                    Enter the <strong>one-time claim code</strong> you were given, then choose your own 4-digit PIN. The code works once — after this you'll log in with your PIN. <em>Nobody else (not even the organiser) can see your PIN.</em>
+                  </div>
+                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CLAIM CODE</label>
+                  <input type="text" autoCapitalize="characters" placeholder="claim code" value={claimCode}
+                    onChange={e=>setClaimCode(e.target.value)}
+                    style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:3,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14,textTransform:"uppercase"}}
+                    autoFocus
+                  />
+                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CHOOSE A 4-DIGIT PIN</label>
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={claimPin}
+                    onChange={e=>setClaimPin(e.target.value.replace(/\D/g,"").slice(0,4))}
+                    style={{width:"100%",padding:"12px 14px",fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:10,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14}}
+                  />
+                  <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CONFIRM PIN</label>
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN" value={claimPin2}
+                    onChange={e=>setClaimPin2(e.target.value.replace(/\D/g,"").slice(0,4))}
+                    onKeyDown={e=>{if(e.key==="Enter")submitClaim();}}
+                    style={{width:"100%",padding:"12px 14px",fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:10,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4}}
+                  />
+                  {pickError && <div style={{color:"#dc2626",fontSize:12,marginTop:10}}>{pickError}</div>}
+                  <div style={{marginTop:16}}>
+                    <button onClick={submitClaim} disabled={!claimCode.trim()||claimPin.length!==4||claimPin2.length!==4}
+                      style={{width:"100%",padding:"12px",background:(claimCode.trim()&&claimPin.length===4&&claimPin2.length===4)?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>Claim team &amp; set PIN</button>
+                  </div>
+                  <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #eee",textAlign:"center"}}>
+                    <button onClick={()=>{setClaimMode(false);setPickError("");}}
+                      style={{background:"none",border:"none",cursor:"pointer",fontSize:12.5,color:"#00205b",fontWeight:600,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}}>
+                      Already set up? Enter your PIN
+                    </button>
                   </div>
                 </div>
               )}
