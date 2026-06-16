@@ -21,15 +21,6 @@ function activeWindow() {
   const now = new Date();
   return EDIT_WINDOWS.find(w => now >= w.open && now < w.close) || null;
 }
-// Transfers become publicly visible once any swap window has closed (= first R3 tee time passed).
-function transfersRevealed() {
-  const now = new Date();
-  return EDIT_WINDOWS.some(w => w.mode === "swap" && now >= w.close);
-}
-
-// Rosters are public only once play begins (the first tee time).
-const TOURNAMENT_START = new Date("2026-06-18T06:45:00-04:00");
-function tournamentHasStarted() { return new Date() >= TOURNAMENT_START; }
 
 // Duplicated here so the serverless function can validate independently of the frontend.
 // US Open field not yet announced — populate both here and in public/index.html
@@ -285,32 +276,23 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(204).end();
 
-  // GET — return all rosters + transfers (each redacted appropriately)
+  // GET — return all rosters, transfers, and the draft "taken" set.
+  // Draft format: players are exclusive, so nothing is hidden — rosters and
+  // swaps are always visible.
   if (req.method === "GET") {
-    const revealed = tournamentHasStarted();
-    const revealTransfers = transfersRevealed();
     const teams = {};
     const transfers = {};
-    const swapsPending = {}; // boolean map: which teams have a pending swap (no contents)
-    const taken = []; // normalized names off the draft board (no owner identity revealed)
+    const taken = []; // normalized names off the draft board
     for (const id of TEAM_IDS) {
       const raw = await redis.get(`roster:${id}`);
       const roster = raw ? JSON.parse(raw) : [];
-      teams[id] = revealed ? roster : [];
+      teams[id] = roster;
       const tRaw = await redis.get(`transfer:${id}`);
       const transfer = tRaw ? JSON.parse(tRaw) : null;
-      if (transfer) {
-        if (revealTransfers) {
-          transfers[id] = transfer;
-        } else {
-          swapsPending[id] = true;
-        }
-      }
-      // Draft board: expose which players are taken (names only) so pickers can
-      // grey them out, without leaking which team owns whom.
+      if (transfer) transfers[id] = transfer;
       for (const p of effectiveRoster(roster, transfer)) taken.push(normalize(p.name));
     }
-    return res.status(200).json({ teams, transfers, swapsPending, taken, revealed, transfersRevealed: revealTransfers });
+    return res.status(200).json({ teams, transfers, taken });
   }
 
   // POST — save a roster (build mode) or record a swap (swap mode)
