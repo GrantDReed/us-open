@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "pin is required" });
   }
 
-  const hash = hashSecret(pin);
+  const hash = hashSecret(String(pin).trim());
 
   // Scan all teams to find which PIN matches
   for (const id of TEAM_IDS) {

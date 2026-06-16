@@ -313,7 +313,7 @@ export default async function handler(req, res) {
   if (!storedHash) {
     return res.status(401).json({ error: "PIN not set. Set your PIN first." });
   }
-  if (!hashEquals(storedHash, hashSecret(pin))) {
+  if (!hashEquals(storedHash, hashSecret(String(pin).trim()))) {
     return res.status(401).json({ error: "Invalid PIN" });
   }
 

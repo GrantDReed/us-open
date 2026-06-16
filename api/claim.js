@@ -18,8 +18,12 @@ export default async function handler(req, res) {
   if (!code || !pin) {
     return res.status(400).json({ error: "code and pin are required" });
   }
-  // PIN or passphrase: at least 4 characters, any characters allowed.
-  if (String(pin).length < 4 || String(pin).length > 128) {
+  // PIN or passphrase: trim ends, no spaces, 4–128 characters, any other chars.
+  const pinStr = String(pin).trim();
+  if (/\s/.test(pinStr)) {
+    return res.status(400).json({ error: "PIN/passphrase can't contain spaces" });
+  }
+  if (pinStr.length < 4 || pinStr.length > 128) {
     return res.status(400).json({ error: "PIN/passphrase must be 4–128 characters" });
   }
 
@@ -46,7 +50,7 @@ export default async function handler(req, res) {
   }
 
   // Set the team's PIN (peppered hash).
-  await redis.set(`pin:${teamId}`, hashSecret(String(pin)));
+  await redis.set(`pin:${teamId}`, hashSecret(pinStr));
 
   // Mirror /api/pin's verified response so the client goes straight to editing.
   const raw = await redis.get(`roster:${teamId}`);

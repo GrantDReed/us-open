@@ -1015,7 +1015,7 @@ function App() {
                     Enter your PIN or passphrase. You can come back here to edit your team any time until the first tee time.
                   </div>
                   <input type="password" maxLength={128} placeholder="PIN or passphrase" value={pickPin}
-                    onChange={e=>setPickPin(e.target.value)}
+                    onChange={e=>setPickPin(e.target.value.replace(/\s/g,""))}
                     onKeyDown={e=>{if(e.key==="Enter"&&pickPin.length>=4)submitPin();}}
                     style={{width:"100%",padding:"12px 16px",fontSize:20,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
                     autoFocus
@@ -1038,7 +1038,7 @@ function App() {
               {pickStep==="pin" && claimMode && (
                 <div>
                   <div style={{fontSize:12,color:"#555",marginBottom:16,lineHeight:1.5}}>
-                    Enter the <strong>one-time claim code</strong> you were given, then choose your own PIN or passphrase (at least 4 characters — digits, letters, anything). The code works once — after this you'll log in with what you chose. <em>Nobody else (not even the organiser) can see it.</em>
+                    Enter the <strong>one-time claim code</strong> you were given, then choose your own PIN or passphrase (at least 4 characters — digits, letters or symbols, no spaces). The code works once — after this you'll log in with what you chose. <em>Nobody else (not even the organiser) can see it.</em>
                   </div>
                   <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CLAIM CODE</label>
                   <input type="text" autoCapitalize="characters" placeholder="claim code" value={claimCode}
@@ -1048,12 +1048,12 @@ function App() {
                   />
                   <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CHOOSE A PIN OR PASSPHRASE (4+ CHARACTERS)</label>
                   <input type="password" maxLength={128} placeholder="PIN or passphrase" value={claimPin}
-                    onChange={e=>setClaimPin(e.target.value)}
+                    onChange={e=>setClaimPin(e.target.value.replace(/\s/g,""))}
                     style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4,marginBottom:14}}
                   />
                   <label style={{fontSize:11,fontWeight:700,letterSpacing:1,color:"#888"}}>CONFIRM</label>
                   <input type="password" maxLength={128} placeholder="re-enter PIN or passphrase" value={claimPin2}
-                    onChange={e=>setClaimPin2(e.target.value)}
+                    onChange={e=>setClaimPin2(e.target.value.replace(/\s/g,""))}
                     onKeyDown={e=>{if(e.key==="Enter")submitClaim();}}
                     style={{width:"100%",padding:"12px 14px",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:4,border:"2px solid #e8e4da",borderRadius:8,fontFamily:"'DM Sans',sans-serif",outline:"none",marginTop:4}}
                   />
