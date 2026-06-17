@@ -523,7 +523,24 @@ function App() {
     if(b.total===null) return -1;
     return a.total-b.total;
   });
-  const cutIndex = fieldPlayers.findIndex(p=>p.cut);
+  // Players tab is grouped by tier (£4M→£1M). Within a tier, order by live
+  // score once play begins, otherwise by the tier-sheet rank.
+  const playerRank = (p) => {
+    const arr = PRICE_TIERS[p.tier] || [];
+    const i = arr.findIndex(n => nameMatches(n, p.name));
+    return i < 0 ? 999 : i;
+  };
+  const tierGroups = [4,3,2,1].map(tier => ({
+    tier,
+    label: tier===4?"PREMIUM":tier===3?"ELITE":tier===2?"MID-RANGE":"VALUE",
+    players: fieldPlayers.filter(p => p.tier === tier).sort((a,b) => {
+      if (a.cut !== b.cut) return a.cut ? 1 : -1;
+      if (a.total != null && b.total != null) return a.total - b.total;
+      if (a.total != null) return -1;
+      if (b.total != null) return 1;
+      return playerRank(a) - playerRank(b);
+    }),
+  })).filter(g => g.players.length > 0);
 
   // --- Team Picker helpers ---
   const allFieldPlayers = [4,3,2,1].flatMap(tier =>
@@ -860,54 +877,54 @@ function App() {
         {fieldPlayers.length===0 ? (
           <div style={{textAlign:"center",padding:"40px 16px",color:"#999",fontSize:13}}>Loading field…</div>
         ) : (
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {fieldPlayers.map((p,i)=>{
-              const open=expandedPlayer===p.name;
-              const showCutLine=cutIndex>0&&i===cutIndex;
-              return(
-              <React.Fragment key={i}>
-              {showCutLine&&(
-                <div style={{display:"flex",alignItems:"center",gap:10,margin:"6px 0"}}>
-                  <div style={{flex:1,height:2,background:"#dc2626"}}/>
-                  <span style={{fontSize:11,fontWeight:700,color:"#dc2626",letterSpacing:2,whiteSpace:"nowrap"}}>✂ {r2Done?"CUT LINE":"PROJECTED CUT"} {projectedCutScore!==null&&`(${fmt(projectedCutScore)})`}</span>
-                  <div style={{flex:1,height:2,background:"#dc2626"}}/>
-                </div>
-              )}
-              <div onClick={()=>setExpandedPlayer(open?null:p.name)} style={{background:"#fff",borderRadius:8,border:(p.cut&&r2Done)?"1px solid #e8d4d4":"1px solid #e8e4da",cursor:"pointer",overflow:"hidden",opacity:(p.cut&&r2Done)?.6:1}}>
-                <div style={{padding:"10px 14px",display:"grid",gridTemplateColumns:"28px 1fr auto",gap:10,alignItems:"center"}}>
-                  <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:p.tier?costBg[p.tier]:"#ccc",color:"#fff",fontSize:11,fontWeight:700}}>{p.tier??"?"}</span>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:(p.cut&&r2Done)?"#999":"#00205b"}}>{p.name}{p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>}</div>
-                    {p.owners.length>0 && (
-                      <div style={{fontSize:11,color:"#888",marginTop:2}}>owned by {p.owners.map(o=>o.split(" ").pop()).join(" · ")}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {tierGroups.map(g=>(
+            <div key={g.tier}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"#888",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:costBg[g.tier],color:"#fff",fontSize:9,fontWeight:700}}>£{g.tier}</span>
+                {g.label} <span style={{color:"#bbb",fontWeight:600}}>· {g.players.length}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {g.players.map((p,i)=>{
+                  const open=expandedPlayer===p.name;
+                  return(
+                  <div key={i} onClick={()=>setExpandedPlayer(open?null:p.name)} style={{background:"#fff",borderRadius:8,border:(p.cut&&r2Done)?"1px solid #e8d4d4":"1px solid #e8e4da",cursor:"pointer",overflow:"hidden",opacity:(p.cut&&r2Done)?.6:1}}>
+                    <div style={{padding:"10px 14px",display:"grid",gridTemplateColumns:"28px 1fr auto",gap:10,alignItems:"center"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:p.tier?costBg[p.tier]:"#ccc",color:"#fff",fontSize:11,fontWeight:700}}>{p.tier??"?"}</span>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:600,color:(p.cut&&r2Done)?"#999":"#00205b"}}>{p.name}{p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>}</div>
+                        {p.owners.length>0 && (
+                          <div style={{fontSize:11,color:"#888",marginTop:2}}>owned by {p.owners.map(o=>o.split(" ").pop()).join(" · ")}</div>
+                        )}
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:16,fontWeight:800,color:sc(p.total),fontVariantNumeric:"tabular-nums"}}>{fmt(p.total)}</div>
+                        {p.thru && <div style={{fontSize:10,color:"#999",marginTop:1}}>{p.thru==="18"||p.thru==="F"?"F":`thru ${p.thru}`}</div>}
+                      </div>
+                    </div>
+                    {open && (
+                      <div style={{borderTop:"1px solid #eee",background:"#fafaf5",padding:"10px 14px",display:"grid",gridTemplateColumns:"repeat(4,1fr) 56px",gap:6}} onClick={e=>e.stopPropagation()}>
+                        {[1,2,3,4].map(r=>{
+                          const cr=correctedRounds(p);const v=cr["r"+r];
+                          return(
+                            <div key={r} style={{textAlign:"center"}}>
+                              <div style={{fontSize:9,fontWeight:700,color:"#888",letterSpacing:1}}>R{r}</div>
+                              <div style={{fontSize:15,fontWeight:700,color:sc(v??null),fontVariantNumeric:"tabular-nums"}}>{fmt(v??null)}</div>
+                            </div>
+                          );
+                        })}
+                        <div style={{textAlign:"center",borderLeft:"1px solid #e8e4da"}}>
+                          <div style={{fontSize:9,fontWeight:700,color:"#888",letterSpacing:1}}>POS</div>
+                          <div style={{fontSize:13,fontWeight:700,color:"#555"}}>{p.pos||"–"}</div>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:16,fontWeight:800,color:sc(p.total),fontVariantNumeric:"tabular-nums"}}>{fmt(p.total)}</div>
-                    {p.thru && <div style={{fontSize:10,color:"#999",marginTop:1}}>{p.thru==="18"||p.thru==="F"?"F":`thru ${p.thru}`}</div>}
-                  </div>
-                </div>
-                {open && (
-                  <div style={{borderTop:"1px solid #eee",background:"#fafaf5",padding:"10px 14px",display:"grid",gridTemplateColumns:"repeat(4,1fr) 56px",gap:6}} onClick={e=>e.stopPropagation()}>
-                    {[1,2,3,4].map(r=>{
-                      const cr=correctedRounds(p);const v=cr["r"+r];
-                      return(
-                        <div key={r} style={{textAlign:"center"}}>
-                          <div style={{fontSize:9,fontWeight:700,color:"#888",letterSpacing:1}}>R{r}</div>
-                          <div style={{fontSize:15,fontWeight:700,color:sc(v??null),fontVariantNumeric:"tabular-nums"}}>{fmt(v??null)}</div>
-                        </div>
-                      );
-                    })}
-                    <div style={{textAlign:"center",borderLeft:"1px solid #e8e4da"}}>
-                      <div style={{fontSize:9,fontWeight:700,color:"#888",letterSpacing:1}}>POS</div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#555"}}>{p.pos||"–"}</div>
-                    </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
-              </React.Fragment>
-              );
-            })}
+            </div>
+            ))}
           </div>
         )}
       </section>
