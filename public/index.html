@@ -34,9 +34,10 @@ const costBg = { 4: "#b91c1c", 3: "#1d4ed8", 2: "#15803d", 1: "#7e22ce" };
 
 // Editing windows (all times ET). mode: "build" = initial pick (whole roster);
 // "swap" = one-swap transfer. US Open 2026 \u2014 Shinnecock Hills, June 18\u201321.
-// Tee times are placeholders until the official R1/R3 schedule is published.
+// Picks close at the R1 first tee time: 6:35 a.m. ET Thu Jun 18 (USGA, split
+// tees off 1 & 10). R3 transfer-close is a placeholder until the R3 schedule.
 const EDIT_WINDOWS = [
-  { open: new Date("2026-01-01T00:00:00-05:00"), close: new Date("2026-06-18T06:45:00-04:00"), label: "Team picks", mode: "build" },
+  { open: new Date("2026-01-01T00:00:00-05:00"), close: new Date("2026-06-18T06:35:00-04:00"), label: "Team picks", mode: "build" },
   // Post-R2 transfer window \u2014 close = first R3 tee time.
   { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T07:45:00-04:00"), label: "Transfer window", mode: "swap" },
 ];
