@@ -138,34 +138,11 @@ Calibrate tier sizes to field size:
 
 **156-player field (typical PGA, US Open):**
 - £4M: 6 players (elite/win-equity)
-- £3M: 15 players (major contenders, 2 picks per common build)
+- £3M: 15 players (major contenders)
 - £2M: 45 players (workhorse + transfer target)
 - £1M: 90 players (sleepers, dart throws, structural £1Ms)
 
 **Adjust proportionally for smaller fields** (e.g., Masters at ~95 players, the Open at 156 with stronger international representation).
-
-### Build Construction
-
-Game uses £10m budget for 4 players with constraints:
-- Max 1 player from £4M tier
-- Max 2 players from £3M tier
-- Valid builds: 4-3-2-1, 4-2-2-2, 3-3-2-2
-
-**Free transfer at cut** can only go to same-or-lower tier:
-- £4M can swap to £4M/£3M/£2M/£1M
-- £3M can swap to £3M/£2M/£1M
-- £2M can swap to £2M/£1M
-- **£1M can only swap to £1M** — bottom tier needs reasonable cut-makers
-
-**Implications:**
-- £4M and £3M picks must be high-conviction (can't replace like-for-like)
-- £2M is the most-targeted transfer destination — depth matters
-- Concentrate variance in £2M/£1M slots where downside swaps remain available
-
-**Recommended builds by risk tolerance:**
-- **3-3-2-2 (safest):** Two locked £3Ms, two £2Ms — best for risk-averse play
-- **4-2-2-2 (high £4M conviction):** One elite anchor, three workhorses — best when one player is clearly safest
-- **4-3-2-1 (highest ceiling, riskiest):** Stars-and-scrubs — only with high £4M conviction and acceptance that £1M can only swap within £1M
 
 ### Cut Probability > Win Equity
 
