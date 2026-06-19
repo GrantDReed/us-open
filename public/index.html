@@ -269,7 +269,7 @@ function getTier(apiName) {
 // badge and are scored exactly like a missed cut (keep R1/R2, worst-round-of-day
 // penalty for R3/R4). Matching is last-name/first-initial tolerant via nameMatches.
 const WITHDRAWN = [
-  // "Jason Day",
+  "Jason Day", // WD'd R1, 2026 U.S. Open
 ];
 function isWithdrawn(name) {
   return WITHDRAWN.some((w) => nameMatches(w, name));
