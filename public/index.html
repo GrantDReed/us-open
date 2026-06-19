@@ -38,8 +38,10 @@ const costBg = { 4: "#b91c1c", 3: "#1d4ed8", 2: "#15803d", 1: "#7e22ce" };
 // tees off 1 & 10). R3 transfer-close is a placeholder until the R3 schedule.
 const EDIT_WINDOWS = [
   { open: new Date("2026-01-01T00:00:00-05:00"), close: new Date("2026-06-18T06:35:00-04:00"), label: "Team picks", mode: "build" },
-  // Post-R2 transfer window \u2014 close = first R3 tee time.
-  { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T07:45:00-04:00"), label: "Transfer window", mode: "swap" },
+  // Post-R2 transfer window. Opening is gated on R2 actually being complete
+  // (see editingStatus), so the open time is just a floor. Close is a generous
+  // placeholder (end of Sat) until the R3 first tee time is published.
+  { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T23:59:00-04:00"), label: "Transfer window", mode: "swap" },
 ];
 // Order roster chips: highest tier first, swapped-in player last.
 function rosterDisplayOrder(players) {
@@ -49,10 +51,18 @@ function rosterDisplayOrder(players) {
     return (b.cost || 0) - (a.cost || 0);
   });
 }
-function editingStatus() {
+function editingStatus(r2Done) {
   const now = new Date();
   for (const w of EDIT_WINDOWS) {
-    if (now >= w.open && now < w.close) return { allowed: true, label: w.label, mode: w.mode };
+    if (now >= w.open && now < w.close) {
+      // Transfers may only open once Round 2 is actually complete (the cut is
+      // set), regardless of the scheduled clock — guards against fog/weather
+      // delays pushing R2 past the placeholder window time.
+      if (w.mode === "swap" && !r2Done) {
+        return { allowed: false, label: "Transfers open after Round 2", mode: null };
+      }
+      return { allowed: true, label: w.label, mode: w.mode };
+    }
   }
   // Find next window
   const next = EDIT_WINDOWS.find(w => now < w.open);
@@ -407,8 +417,11 @@ function App() {
 
   // Cut line: top 60 and ties
   const allPlayers = Object.values(players);
-  // R2 is over when every player has r2 data AND no one is still mid-round in R2
-  const r2Done = allPlayers.length > 0 && allPlayers.every(p => p.r2 != null) && allPlayers.every(p => {
+  // R2 is over when every player has r2 data AND no one is still mid-round in R2.
+  // Withdrawn players never post a full R2, so exclude them — otherwise a single
+  // WD would keep r2Done false forever (cut never finalizes, no MC penalties).
+  const r2Field = allPlayers.filter(p => !isWithdrawn(p.name));
+  const r2Done = r2Field.length > 0 && r2Field.every(p => p.r2 != null) && r2Field.every(p => {
     if (p.r3 != null) return true; // already in R3, clearly past R2
     const t = parseInt(p.thru);
     return isNaN(t) || t >= 18; // not mid-round
@@ -711,7 +724,7 @@ function App() {
         <div style={{display:"flex",gap:6}}>
           <button onClick={()=>setAutoPoll(!autoPoll)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"1px solid #ccc",borderRadius:6,cursor:"pointer",background:autoPoll?"#00205b":"#fff",color:autoPoll?"#fff":"#555"}}>{autoPoll?"⏸ Pause":"▶ Live"}</button>
           <button onClick={doFetch} disabled={status==="fetching"} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #00205b",borderRadius:6,cursor:"pointer",background:"#fff",color:"#00205b",opacity:status==="fetching"?.5:1}}>🏌️ Refresh</button>
-          {(()=>{const es=editingStatus();return es.allowed?(
+          {(()=>{const es=editingStatus(r2Done);return es.allowed?(
             <button onClick={openPicker} style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",border:"2px solid #cc0000",borderRadius:6,cursor:"pointer",background:"#cc0000",color:"#fff"}}>✏️ Pick / Edit Team</button>
           ):(
             <span style={{fontSize:11,color:"#999",fontStyle:"italic",padding:"6px 0"}}>{es.label}</span>
@@ -1018,7 +1031,7 @@ function App() {
           <div style={{background:"#fff",borderRadius:12,maxWidth:480,width:"100%",maxHeight:"90vh",overflow:"auto",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"20px 24px",borderBottom:"1px solid #eee",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:"#00205b",margin:0}}>
-                {pickStep==="pin"?(claimMode?"Claim Your Team":"Enter PIN"):`${TEAMS.find(t=>t.id===pickTeamId)?.name} — ${editingStatus().mode==="swap"?"Transfer":(pickPlayers.length>0?"Edit Roster":"Build Roster")}`}
+                {pickStep==="pin"?(claimMode?"Claim Your Team":"Enter PIN"):`${TEAMS.find(t=>t.id===pickTeamId)?.name} — ${editingStatus(r2Done).mode==="swap"?"Transfer":(pickPlayers.length>0?"Edit Roster":"Build Roster")}`}
               </h2>
               <button onClick={()=>setPickOpen(false)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999",lineHeight:1}}>×</button>
             </div>
@@ -1091,7 +1104,7 @@ function App() {
               {pickStep==="edit" && (
                 <div>
                   {/* Transfer-window guidance — only during swap mode */}
-                  {editingStatus().mode==="swap" && (
+                  {editingStatus(r2Done).mode==="swap" && (
                     <div style={{marginBottom:16,padding:"12px 14px",background:"#eef2f9",border:"1px solid #cdd9ec",borderRadius:8,fontSize:12,lineHeight:1.5,color:"#334155"}}>
                       <div style={{fontWeight:700,letterSpacing:1,fontSize:11,color:"#00205b",marginBottom:6}}>TRANSFER WINDOW</div>
                       You may swap <strong>exactly one</strong> player for another of <strong>equal or lower value</strong> who is <strong>not already on another team</strong>. The dropped player keeps their R1/R2 score; the new player only contributes R3/R4.
@@ -1179,7 +1192,7 @@ function App() {
                     <button onClick={()=>setPickOpen(false)}
                       style={{flex:1,padding:"12px",background:"#f0ece2",border:"1px solid #e8e4da",borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",color:"#555"}}>Cancel</button>
                     <button onClick={submitTeam} disabled={!pickValid||pickSaving}
-                      style={{flex:2,padding:"12px",background:pickValid?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickValid?"pointer":"default",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{pickSaving?"Saving…":(editingStatus().mode==="swap"?"Save Swap":"Save Team")}</button>
+                      style={{flex:2,padding:"12px",background:pickValid?"#00205b":"#ccc",color:"#fff",border:"none",borderRadius:6,cursor:pickValid?"pointer":"default",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{pickSaving?"Saving…":(editingStatus(r2Done).mode==="swap"?"Save Swap":"Save Team")}</button>
                   </div>
                 </div>
               )}
