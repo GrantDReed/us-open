@@ -29,42 +29,12 @@ const computeThru = (c) => {
   return null;
 };
 
+// ESPN's golf data comes from the public "scoreboard" endpoint. There is no
+// working golf "leaderboard" or "summary" endpoint (both return ESPN errors),
+// and usopen.com is behind Akamai bot-blocking — so this is the only viable
+// feed. Note: scoreboard competitor objects carry NO per-player status, so
+// withdrawals/positions are not available from this feed (see WITHDRAWN below).
 const SOURCES = [
-  {
-    name: "espn-leaderboard",
-    url: "https://site.web.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard",
-    parse: (data) => {
-      const competitors = [];
-      for (const event of data?.events || []) {
-        if (!isUsOpen(event)) continue;
-        for (const comp of event?.competitions || []) {
-          competitors.push(...(comp.competitors || []));
-        }
-      }
-      return competitors.map((c) => {
-        const scoreVal = c.score?.displayValue ?? c.score ?? null;
-        let total = null;
-        if (scoreVal === "E") total = 0;
-        else if (typeof scoreVal === "number") total = scoreVal;
-        else if (typeof scoreVal === "string") {
-          const n = parseInt(scoreVal);
-          if (!isNaN(n)) total = n;
-        }
-        const ls = c.linescores || [];
-        return {
-          name: c.athlete?.displayName || "",
-          total,
-          thru: computeThru(c),
-          r1: relToPar(ls[0]),
-          r2: relToPar(ls[1]),
-          r3: relToPar(ls[2]),
-          r4: relToPar(ls[3]),
-          pos: c.status?.position?.displayName ?? null,
-          status: c.status?.type?.description ?? null,
-        };
-      });
-    },
-  },
   {
     name: "espn-scoreboard",
     url: "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard",
