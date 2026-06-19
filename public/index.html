@@ -263,6 +263,17 @@ function getTier(apiName) {
   }
   return null;
 }
+
+// Withdrawn players. ESPN's golf feed doesn't expose WD status, so we maintain
+// it manually: add a name here and redeploy to mark a player WD. They get a WD
+// badge and are scored exactly like a missed cut (keep R1/R2, worst-round-of-day
+// penalty for R3/R4). Matching is last-name/first-initial tolerant via nameMatches.
+const WITHDRAWN = [
+  // "Jason Day",
+];
+function isWithdrawn(name) {
+  return WITHDRAWN.some((w) => nameMatches(w, name));
+}
 // teamsOwning is defined inside App() so it can use dynamic rosters
 
 function App() {
@@ -435,8 +446,10 @@ function App() {
     const tx = apiTransfers[team.id] || TRANSFERS.find(t => t.teamId === team.id);
     return team.players.map(p => {
       if (tx && nameMatches(p.name, tx.out)) return { ...p, role: "swapped-out" };
-      if (isMC(p.name) && !tx?.out) return { ...p, role: "mc" };
-      if (tx && isMC(p.name) && !nameMatches(p.name, tx.out)) return { ...p, role: "mc" };
+      // Withdrawn players are scored like a missed cut (same "mc" role).
+      const done = isMC(p.name) || isWithdrawn(p.name);
+      if (done && !tx?.out) return { ...p, role: "mc" };
+      if (tx && done && !nameMatches(p.name, tx.out)) return { ...p, role: "mc" };
       return { ...p, role: "original" };
     }).concat(tx ? [{ name: tx.in, cost: tx.inCost, role: "swapped-in" }] : []);
   };
@@ -517,8 +530,10 @@ function App() {
     tier: getTier(p.name),
     owners: teamsOwning(p.name),
     cut: projectedCutScore !== null && r1r2Score(p) != null && r1r2Score(p) > projectedCutScore,
+    wd: isWithdrawn(p.name),
   })).sort((a,b)=>{
-    if(a.cut!==b.cut) return a.cut?1:-1;
+    const ao=a.cut||a.wd, bo=b.cut||b.wd; // cut/withdrawn players sink to the bottom
+    if(ao!==bo) return ao?1:-1;
     if(a.total===null&&b.total===null) return a.name.localeCompare(b.name);
     if(a.total===null) return 1;
     if(b.total===null) return -1;
@@ -800,7 +815,7 @@ function App() {
                             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:16,height:16,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:9,fontWeight:700}}>{p.cost}</span>
                             <span style={{textDecoration:isOut?"line-through":"none"}}>{p.name}</span>
                                                         {isIn&&<span style={{fontSize:9,fontWeight:700,color:"#15803d",marginLeft:2}}>↑IN</span>}
-                            {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:2}}>MC</span>}
+                            {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:2}}>{isWithdrawn(p.name)?"WD":"MC"}</span>}
                             <span style={{fontWeight:700,color:sc(contrib),fontSize:10}}>{fmt(contrib)}</span>
                             {!isOut&&thru&&<span style={{fontSize:9,color:"#999"}}>({thru==="18"||thru==="F"?"F":thru})</span>}
                           </span>
@@ -830,7 +845,7 @@ function App() {
                             <div>
                               <span style={{fontSize:13,fontWeight:600,textDecoration:isOut?"line-through":"none",opacity:isOut?.5:1}}>{p.name}</span>
                               {isIn&&<span style={{fontSize:9,fontWeight:700,color:"#15803d",marginLeft:4}}>↑IN</span>}
-                              {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:4}}>MC</span>}
+                              {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:4}}>{isWithdrawn(p.name)?"WD":"MC"}</span>}
                               {isMc&&<div style={{fontSize:10,color:"#ea580c",fontStyle:"italic",marginTop:1}}>R3/R4 = worst active round score</div>}
                             </div>
                           </div>
@@ -874,11 +889,11 @@ function App() {
                   <div style={{flex:1,height:2,background:"#dc2626"}}/>
                 </div>
               )}
-              <div onClick={()=>setExpandedPlayer(open?null:p.name)} style={{background:"#fff",borderRadius:8,border:(p.cut&&r2Done)?"1px solid #e8d4d4":"1px solid #e8e4da",cursor:"pointer",overflow:"hidden",opacity:(p.cut&&r2Done)?.6:1}}>
+              <div onClick={()=>setExpandedPlayer(open?null:p.name)} style={{background:"#fff",borderRadius:8,border:((p.cut&&r2Done)||p.wd)?"1px solid #e8d4d4":"1px solid #e8e4da",cursor:"pointer",overflow:"hidden",opacity:((p.cut&&r2Done)||p.wd)?.6:1}}>
                 <div style={{padding:"10px 14px",display:"grid",gridTemplateColumns:"28px 1fr auto",gap:10,alignItems:"center"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:p.tier?costBg[p.tier]:"#ccc",color:"#fff",fontSize:11,fontWeight:700}}>{p.tier??"?"}</span>
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:(p.cut&&r2Done)?"#999":"#00205b"}}>{p.name}{p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>}</div>
+                    <div style={{fontSize:14,fontWeight:600,color:((p.cut&&r2Done)||p.wd)?"#999":"#00205b"}}>{p.name}{p.wd?<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>WD</span>:(p.cut&&r2Done&&<span style={{fontSize:10,fontWeight:700,color:"#dc2626",marginLeft:6}}>MC</span>)}</div>
                     {p.owners.length>0 && (
                       <div style={{fontSize:11,color:"#888",marginTop:2}}>owned by {p.owners.map(o=>o.split(" ").pop()).join(" · ")}</div>
                     )}
@@ -940,7 +955,7 @@ function App() {
                             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:16,height:16,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:9,fontWeight:700}}>{p.cost}</span>
                             <span style={{textDecoration:isOut?"line-through":"none"}}>{p.name}</span>
                             {isIn&&<span style={{fontSize:9,fontWeight:700,color:"#15803d",marginLeft:2}}>↑IN</span>}
-                            {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:2}}>MC</span>}
+                            {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:2}}>{isWithdrawn(p.name)?"WD":"MC"}</span>}
                             <span style={{fontWeight:700,color:sc(contrib),fontSize:10}}>{fmt(contrib)}</span>
                             {!isOut&&thru&&<span style={{fontSize:9,color:"#999"}}>({thru==="18"||thru==="F"?"F":thru})</span>}
                           </span>
@@ -970,7 +985,7 @@ function App() {
                             <div>
                               <span style={{fontSize:13,fontWeight:600,textDecoration:isOut?"line-through":"none",opacity:isOut?.5:1}}>{p.name}</span>
                               {isIn&&<span style={{fontSize:9,fontWeight:700,color:"#15803d",marginLeft:4}}>↑IN</span>}
-                              {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:4}}>MC</span>}
+                              {isMc&&<span style={{fontSize:9,fontWeight:700,color:"#dc2626",marginLeft:4}}>{isWithdrawn(p.name)?"WD":"MC"}</span>}
                               {isMc&&<div style={{fontSize:10,color:"#ea580c",fontStyle:"italic",marginTop:1}}>R3/R4 = worst active round score</div>}
                             </div>
                           </div>
