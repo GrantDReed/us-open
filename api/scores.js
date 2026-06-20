@@ -74,7 +74,9 @@ const SOURCES = [
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=120");
+  // No edge caching — traffic is tiny (a few clients polling every 3 min) so the
+  // cache saved nothing meaningful but served stale scores during live play.
+  res.setHeader("Cache-Control", "no-store, max-age=0");
 
   const errors = [];
 
