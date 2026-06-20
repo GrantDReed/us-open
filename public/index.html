@@ -39,9 +39,9 @@ const costBg = { 4: "#b91c1c", 3: "#1d4ed8", 2: "#15803d", 1: "#7e22ce" };
 const EDIT_WINDOWS = [
   { open: new Date("2026-01-01T00:00:00-05:00"), close: new Date("2026-06-18T06:35:00-04:00"), label: "Team picks", mode: "build" },
   // Post-R2 transfer window. Opening is gated on R2 actually being complete
-  // (see editingStatus), so the open time is just a floor. Close is a generous
-  // placeholder (end of Sat) until the R3 first tee time is published.
-  { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T23:59:00-04:00"), label: "Transfer window", mode: "swap" },
+  // (see editingStatus), so the open time is just a floor. Close = R3 first tee
+  // time: 6:00 a.m. PDT / 9:00 a.m. EDT, Sat Jun 20.
+  { open: new Date("2026-06-19T18:00:00-04:00"), close: new Date("2026-06-20T06:00:00-07:00"), label: "Transfer window", mode: "swap" },
 ];
 // Order roster chips: highest tier first, swapped-in player last.
 function rosterDisplayOrder(players) {
