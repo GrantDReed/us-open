@@ -554,6 +554,27 @@ function App() {
   });
   const cutIndex = fieldPlayers.findIndex(p=>p.cut);
 
+  // Transfer-flow candidates — rendered like the Players tab (live score + cut
+  // line) since tier rank numbers are useless mid-tournament. Built from the
+  // canonical roster names (so selection matches the roster) and enriched with
+  // live scores via findScore.
+  const swapCandidates = [4,3,2,1].flatMap(tier =>
+    PRICE_TIERS[tier].map(name => {
+      const s = findScore(name) || {};
+      const r1r2 = (s.r1 != null && s.r2 != null) ? s.r1 + s.r2 : null;
+      const cut = projectedCutScore !== null && r1r2 != null && r1r2 > projectedCutScore;
+      return { name, cost: tier, total: s.total ?? null, thru: s.thru ?? null, cut, wd: isWithdrawn(name) };
+    })
+  ).sort((a,b)=>{
+    const ao=a.cut||a.wd, bo=b.cut||b.wd; // out players sink to the bottom
+    if(ao!==bo) return ao?1:-1;
+    if(a.total===null&&b.total===null) return a.name.localeCompare(b.name);
+    if(a.total===null) return 1;
+    if(b.total===null) return -1;
+    return a.total-b.total;
+  });
+  const swapCutIndex = swapCandidates.findIndex(p=>p.cut);
+
   // --- Team Picker helpers ---
   const allFieldPlayers = [4,3,2,1].flatMap(tier =>
     PRICE_TIERS[tier].map(name => ({ name, cost: tier }))
@@ -1156,8 +1177,44 @@ function App() {
                     <strong>Draft format:</strong> every golfer can be on only one team. Players already taken by another team are greyed out and locked.
                   </div>
 
-                  {/* Player list by tier */}
-                  {allFieldPlayers.length===0 ? (
+                  {/* Transfer flow: Players-tab-style list (live score + cut line). */}
+                  {editingStatus(r2Done).mode==="swap" ? (
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {swapCandidates.map((p,i)=>{
+                        const selected=pickPlayers.some(x=>x.name===p.name);
+                        const out=p.cut||p.wd; // missed cut / withdrawn — not "still in the tournament"
+                        const taken=!selected&&isTakenByOther(p.name);
+                        const disabled=!selected&&(taken||out||pickPlayers.length>=4);
+                        const showCut=swapCutIndex>0&&i===swapCutIndex;
+                        return(
+                          <React.Fragment key={p.name}>
+                          {showCut&&(
+                            <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0"}}>
+                              <div style={{flex:1,height:2,background:"#dc2626"}}/>
+                              <span style={{fontSize:10,fontWeight:700,color:"#dc2626",letterSpacing:2,whiteSpace:"nowrap"}}>✂ {r2Done?"CUT":"PROJ CUT"}{projectedCutScore!==null&&` (${fmt(projectedCutScore)})`}</span>
+                              <div style={{flex:1,height:2,background:"#dc2626"}}/>
+                            </div>
+                          )}
+                          <button onClick={()=>!disabled&&togglePlayer(p.name,p.cost)}
+                            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:selected?"#00205b":"#fff",color:selected?"#fff":(taken||out)?"#999":"#333",border:selected?"1px solid #00205b":"1px solid #e8e4da",borderRadius:8,cursor:disabled?"default":"pointer",opacity:disabled?.5:1,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:selected?700:500,transition:"all .15s"}}>
+                            <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                              <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:costBg[p.cost],color:"#fff",fontSize:9,fontWeight:700,flexShrink:0}}>{p.cost}</span>
+                              <span style={{textDecoration:out?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?"✓ ":""}{p.name}</span>
+                              {p.wd&&<span style={{fontSize:9,fontWeight:700,color:selected?"#ff9d9d":"#dc2626"}}>WD</span>}
+                              {!p.wd&&p.cut&&r2Done&&<span style={{fontSize:9,fontWeight:700,color:selected?"#ff9d9d":"#dc2626"}}>MC</span>}
+                            </span>
+                            {taken
+                              ? <span style={{fontSize:9,fontWeight:700,letterSpacing:1,color:"#999",background:"#f0ece2",border:"1px solid #e0d9c8",padding:"2px 6px",borderRadius:10,flexShrink:0}}>TAKEN</span>
+                              : <span style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                                  <span style={{fontWeight:800,fontSize:13,color:selected?"#fff":sc(p.total),fontVariantNumeric:"tabular-nums"}}>{fmt(p.total)}</span>
+                                  {p.thru&&<span style={{fontSize:9,color:selected?"#cbd5e1":"#999",minWidth:30,textAlign:"right"}}>{p.thru==="18"||p.thru==="F"?"F":`t${p.thru}`}</span>}
+                                </span>}
+                          </button>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  ) : allFieldPlayers.length===0 ? (
                     <div style={{padding:"24px 12px",textAlign:"center",fontSize:12,color:"#999",fontStyle:"italic"}}>The US Open field hasn't been announced yet — player tiers will appear here once they're set.</div>
                   ) : [4,3,2,1].map(tier=>(
                     <div key={tier} style={{marginBottom:12}}>
